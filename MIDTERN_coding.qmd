@@ -1,0 +1,191 @@
+---
+title: "MIDTERN"
+date: today
+author: TzuhuiLi
+format:
+  pdf:
+    engine: xelatex
+    documentclass: article
+    geometry: "left=2cm, right=2cm, top=2cm, bottom=2cm, a4paper"  
+    fontsize: 12pt  
+    header-includes:
+      - \usepackage{xeCJK}
+      - \setCJKmainfont{Microsoft JhengHei UI}  
+toc: true
+---
+
+## 2.1 單樣本檢定
+
+### 介紹
+
+檢驗單個樣本的中位數或分佈是否等於某個指定值。
+
+適用情境： 1.資料不符合常態分布。 2.樣本數量有限。
+
+
+### 符號檢定（Sign Test）
+
+
+```{r}
+
+# 定義學生成績
+Scores <- c(78, 82, 74, 69, 88, 92, 81, 76, 84, 73, 77, 85, 80, 
+            79, 71, 90, 83, 75, 70, 86)
+
+# 創建標記向量
+marks <- ifelse(Scores > 80, "-", ifelse(Scores <80,"+","tie")) 
+#成績大於80的標記為"-"
+#小於等於80的標記為"+"
+
+# 將成績和標記合併為資料框
+result <- data.frame(Scores, marks)
+# 將資料框轉置
+transposed_result <- as.data.frame(t(result))
+
+# 添加行名
+rownames(transposed_result) <- c("Scores", "Marks")
+colnames(transposed_result) <- c(1:20)
+
+library(knitr)
+
+kable(transposed_result)
+
+#進行符號檢定
+library(DescTools)
+sign_test <- SignTest(Scores , mu = 80)
+print(sign_test)
+
+
+```
+
+### Wilcoxon符號秩檢定
+```{r}
+# 計算與中位數（80）的絕對差
+Scores_abs <- abs(Scores - 80)
+
+# 將結果存入資料框
+results <- data.frame(Score = Scores, Difference = Scores_abs)
+
+# 去掉絕對差為0的資料
+results <- results[results$Difference != 0, ]
+
+# 排名，並為小於中位數的加負號
+results$Rank <- rank(results$Difference)
+results$SignedRank <- ifelse(results$Score < 80, -results$Rank, results$Rank)
+
+# 計算加總正符號
+sum_positive_ranks <- sum(results$SignedRank[results$SignedRank > 0])
+transposed_results <- as.data.frame(t(results))
+rownames(transposed_results) <- c("Scores", "Zi","Rank","Ri")
+
+
+# 顯示結果表格
+library(knitr)
+library(kableExtra)
+kable(transposed_results, caption = "Wilcoxon Signed Rank Test Results"
+      , full_width = TRUE)
+
+
+# 顯示加總正符號
+cat("加總正符號的值為:", sum_positive_ranks)
+
+wilcox_test<- wilcox.test(Scores,mu = 80)
+print(wilcox_test)
+```
+
+### Kolmogorov-Smirnov 檢定
+
+```{r}
+ks_test <- ks.test(Scores , "pnorm", mean = mean(Scores), sd = sd(Scores))
+print(ks_test)
+```
+
+### Shapiro-Wilk Test
+```{r}
+# 執行 Shapiro-Wilk 檢定
+shapiro_test_result <- shapiro.test(Scores)
+# 顯示檢定結果
+print(shapiro_test_result)
+```
+
+#### Kolmogorov-Smirnov 和 Shapiro-Wilk 檢定的檢定力比較
+```{r}
+# 載入必要的套件
+library(knitr)
+
+# 定義檢定力比較函數
+compare_power <- function(n, num_simulations = 1000, alpha = 0.05) {
+  # 初始化結果儲存變量
+  ks_power <- 0
+  shapiro_power <- 0
+  
+  # 模擬過程
+  for (i in 1:num_simulations) {
+    # 生成符合非正態分布的資料（例如，指數分布）
+    non_normal_data <- rexp(n, rate = 1)
+    
+    # Kolmogorov-Smirnov 檢定
+    ks_test_non_normal <- ks.test(non_normal_data, "pnorm"
+                                  , mean(non_normal_data), sd(non_normal_data))
+    
+    # Shapiro-Wilk 檢定
+    shapiro_test_non_normal <- shapiro.test(non_normal_data)
+    
+    # 判斷是否成功拒絕原假設
+    if (ks_test_non_normal$p.value < alpha) ks_power <- ks_power + 1
+    if (shapiro_test_non_normal$p.value < alpha) shapiro_power <- shapiro_power + 1
+  }
+  
+  # 計算檢定力
+  ks_power <- ks_power / num_simulations
+  shapiro_power <- shapiro_power / num_simulations
+  
+  return(c(KS_Power = ks_power, Shapiro_Power = shapiro_power))
+}
+
+# 設定不同的樣本大小
+sample_sizes <- c(20, 50, 100, 200,300)
+results <- data.frame(Sample_Size = sample_sizes)
+
+# 計算不同樣本大小的檢定力
+for (n in sample_sizes) {
+  power_result <- compare_power(n)
+  results[results$Sample_Size == n, "KS_Power"] <- power_result["KS_Power"]
+  results[results$Sample_Size == n, "Shapiro_Power"] <- power_result["Shapiro_Power"]
+}
+
+# 顯示結果表格
+kable(results, caption = "不同樣本大小下 Kolmogorov-Smirnov 和 Shapiro-Wilk 檢定的檢定力比較"
+      , digits = 3)
+
+```
+
+
+
+### Run test
+```{r}
+Temperatures = c(15.2, 15.5, 15.3, 15.6, 15.4, 15.7, 15.6, 15.8,
+                 15.9, 16.0, 15.8, 15.7, 15.5, 15.3, 15.6, 15.8,
+                 16.1, 16.2, 16.3, 16.4)
+
+library(tseries)
+run_test <- runs.test(factor(Temperatures > median(Temperatures)))
+print(run_test)
+```
+### Trend test
+
+```{r}
+library(randtests)
+
+trend_test <- cox.stuart.test(Temperatures)
+print(trend_test)
+# 繪製散佈圖
+plot(Temperatures, 
+     main = "Scatter Plot of Temperatures",
+     xlab = "day", 
+     ylab = "Temperature (°C)", 
+     pch = 16,     # 使用實心點標記
+     col = "blue") # 設置點的顏色
+
+```
+
